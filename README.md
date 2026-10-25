@@ -12,13 +12,13 @@ When a tool's answer or something you type holds a key in a known format, or a k
 ## What it covers
 
 - A tool's text and its structured record, such as a Bash command's stdout, at any depth.
-- Anything you type in a prompt: what the model reads, the transcript's rows, the prompt history (the up arrow), and the record of a prompt you type while a turn runs.
+- Anything you type in a prompt: what the model reads, the transcript's rows, the prompt history (the up arrow), and the record of a prompt you type while a turn runs. A key in a known format that you paste is kept for the session, so the model can still use it; see [Pasted keys](#pasted-keys).
 - A slash command's arguments. The command runs with the key redacted, so a command that needs a key in its arguments gets the placeholder instead.
 - A Bash command the model writes with a key in it. The command is denied.
 
 ## Stored secrets
 
-Store a key and the hosts it may go to, and the model can make HTTPS requests with it through the `mcp__sanitize-secrets__request` tool. The model names the key. The mod adds it to the request on the host and removes it from the response before the model reads it.
+Store a key and the hosts it may go to, and the model can make HTTPS requests with it through the `mcp__sanitize-secrets__request` tool. The model names the key. The mod adds it to the request on the host and removes it from the response before the model reads it. The tool is offered even when nothing is stored, so the model knows this is how a key reaches a request.
 
 Set them in your own terminal, so the key never passes through a session:
 
@@ -50,6 +50,14 @@ The request tool refuses:
 A redirect is followed. One that leaves the origin drops every request header, the secret's included; this was checked against `Authorization` and a custom `X-Api-Key`. A response body is cut at 100,000 characters.
 
 The keys live only in the mod's memory for the session: never in its state, its store or a file.
+
+### Pasted keys
+
+When a key in a known format is in a prompt you send, the mod keeps it in memory for the session under a name, `pasted-1`, `pasted-2` and so on. The model reads the name in the key's place and is told it can send the key with the request tool. A key you paste twice keeps its first name.
+
+A pasted key has no hosts to start with. The first time the model sends it to a host, you are asked whether to send it there. If you allow it, that host stays allowed for the session. If you refuse, close the dialog, or no one can answer, as in `claude -p`, the request does not run. A pasted key always goes in `Authorization: Bearer <key>`. A key that goes in another header, such as an Anthropic `x-api-key`, has to be stored in the vault instead.
+
+Keys in a slash command's arguments are not kept, only redacted.
 
 ## What it does not cover
 
@@ -116,6 +124,7 @@ The tests cover:
 - the Bash deny;
 - prompts and slash-command arguments;
 - the vault: its parsing, the host and header checks, and the redaction of each spelling;
+- pasted keys: keeping them, and asking before each new host;
 - the request tool, with the network stood in for.
 
 The rest was checked by hand, with fake keys:

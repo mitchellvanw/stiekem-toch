@@ -1,6 +1,6 @@
 {
   "name": "sanitize-secrets",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Redacts API keys and tokens from tool results and prompts, and lets the model use stored keys without reading them.",
   "author": {
     "name": "Mitchell van Wijngaarden"

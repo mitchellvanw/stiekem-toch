@@ -1,74 +1,104 @@
 import type { Register } from 'claude-code'
-import { redact, redactBlock, redactDeep, secretKinds, withhold } from './patterns'
-import { checkRequest, parseVault, spellings, type Request, type Vault } from './vault'
+import { formatMatches, redact, redactBlock, redactDeep, secretKinds, withhold } from './patterns'
+import { checkRequest, hostOf, parseVault, pastedGrant, spellings, type Grant, type Request } from './vault'
 
 const TOOL = 'request'
+const TOOL_NAME = `mcp__sanitize-secrets__${TOOL}`
 // Bodies past this are cut before the model reads them.
 const MAX_BODY = 100_000
+const ALLOW = 'Send it'
 
 export const register: Register = (on, options) => {
   // The stored secrets live here alone, in this module's memory: never in `$.state`, `$.store` or a file.
-  let vault: Vault = new Map()
+  // Keys the person pastes into a prompt join them for the session.
+  const vault = new Map<string, Grant>()
   let isVaultBroken = false
   try {
-    vault = parseVault(options.vault as string | undefined)
+    for (const [name, grant] of parseVault(options.vault as string | undefined)) vault.set(name, grant)
   } catch {
     isVaultBroken = true
   }
-  const known = spellings(vault)
+  let known = spellings(vault)
 
-  if (vault.size > 0 || isVaultBroken) {
-    on('session.start', async ($, e, next) => {
-      const started = await next(e)
-
-      if (isVaultBroken) {
-        $.ui.toast(`${$.plugin.name}: the vault option is not valid JSON, so no stored secret can be used`)
-        return started
-      }
-
-      const listing = [...vault].map(([name, g]) => `- "${name}": ${g.hosts.join(', ')}`).join('\n')
-      await $.tool.register({
-        name: TOOL,
-        description: [
-          'Makes an HTTPS request with a stored secret attached. You never see the secret: the plugin adds it to the request and removes it from the response.',
-          'Each secret goes only to its own hosts:',
-          listing,
-          'Use this instead of putting a key in a Bash command, which is refused.',
-        ].join('\n'),
-        inputSchema: {
-          type: 'object',
-          properties: {
-            secret: { type: 'string', enum: [...vault.keys()] },
-            method: { type: 'string', enum: ['GET', 'HEAD', 'POST', 'PUT', 'PATCH', 'DELETE'] },
-            url: { type: 'string', description: 'https://<host>/<path>, the host one of the secret\'s own' },
-            headers: { type: 'object', additionalProperties: { type: 'string' } },
-            body: { type: 'string' },
-          },
-          required: ['secret', 'url'],
-        },
-        isDeferred: false,
-      })
-
-      return started
-    })
-
-    // The request runs here, on the host: the model's call names the secret, never holds it.
-    on('tool.call', { tool: `mcp__sanitize-secrets__${TOOL}` }, async ($, e) => {
-      const checked = checkRequest(vault, e as unknown as Request)
-      if ('deny' in checked) return { deny: `${$.plugin.name}: ${checked.deny}` }
-
-      const res = await $.http.fetch(checked.url, checked.init)
-
-      const kinds: string[] = []
-      const body = res.text.length > MAX_BODY ? `${res.text.slice(0, MAX_BODY)}\n[cut at ${MAX_BODY} characters]` : res.text
-      const result = redactDeep({ status: res.status, headers: res.headers, body }, kinds, known)
-
-      if (kinds.length > 0) $.ui.toast(`Redacted ${kinds.length} secret${kinds.length === 1 ? '' : 's'} from a response: ${kinds.join(', ')}`)
-
-      // A plugin's tool answers text. It is written after the redaction, so JSON escaping cannot hide a secret from it.
-      return { result: JSON.stringify(result, null, 2) }
-    }).catch($ => ({ deny: `${$.plugin.name}: the request failed, so nothing is returned.` }))
+  const keep = (name: string, grant: Grant) => {
+    vault.set(name, grant)
+    known = spellings(vault)
   }
+
+  // The tool is offered with an empty vault too, so the model learns how a key reaches a request
+  // instead of reading one from a file into a Bash command. Its `secret` takes no enum: a key
+  // kept mid-session is usable before the tool list is read again, and an unknown name is refused.
+  const toolSpec = () => {
+    const listing = [...vault].map(([name, g]) =>
+      g.pasted === undefined
+        ? `- "${name}": ${g.hosts.join(', ')}`
+        : `- "${name}": a ${g.pasted} the person pasted, sent as a bearer token; the person is asked before it goes to a host they have not allowed${g.hosts.length > 0 ? ` (allowed: ${g.hosts.join(', ')})` : ''}`,
+    )
+    return {
+      name: TOOL,
+      description: [
+        'Makes an HTTPS request with a stored secret attached. You never see the secret: the plugin adds it to the request and removes it from the response.',
+        listing.length > 0 ? `Each secret goes only to its own hosts:\n${listing.join('\n')}` : 'No secret is stored yet.',
+        'The person adds one by pasting it into a prompt, which keeps it for the session, or for good with `claude plugin configure sanitize-secrets --values-stdin` in their own terminal.',
+        'Use this instead of putting a key in a Bash command, which is refused, or reading one from a file into a command.',
+      ].join('\n'),
+      inputSchema: {
+        type: 'object',
+        properties: {
+          secret: { type: 'string', description: 'The name of a stored secret' },
+          method: { type: 'string', enum: ['GET', 'HEAD', 'POST', 'PUT', 'PATCH', 'DELETE'] },
+          url: { type: 'string', description: "https://<host>/<path>, the host one of the secret's own" },
+          headers: { type: 'object', additionalProperties: { type: 'string' } },
+          body: { type: 'string' },
+        },
+        required: ['secret', 'url'],
+      },
+      isDeferred: false,
+    }
+  }
+
+  on('session.start', async ($, e, next) => {
+    const started = await next(e)
+
+    if (isVaultBroken) $.ui.toast(`${$.plugin.name}: the vault option is not valid JSON, so no configured secret can be used`)
+    await $.tool.register(toolSpec())
+
+    return started
+  })
+
+  // The request runs here, on the host: the model's call names the secret, never holds it.
+  on('tool.call', { tool: TOOL_NAME }, async ($, e) => {
+    const req = e as unknown as Request
+    const grant = vault.get(req.secret)
+    const host = hostOf(req.url)
+
+    // A pasted key has no hosts of its own: the person allows each one at first use.
+    if (grant?.pasted !== undefined && host !== undefined && !grant.hosts.includes(host)) {
+      const answer = await $.ui
+        .ask(`Send the ${grant.pasted} you pasted to ${host}? It is added as a bearer token, and ${host} stays allowed for this session.`, {
+          options: [ALLOW, "Don't send it"],
+          header: 'Secret',
+        })
+        .catch(() => undefined)
+      if (answer !== ALLOW) return { deny: `${$.plugin.name}: the person did not allow "${req.secret}" to go to ${host}.` }
+
+      keep(req.secret, { ...grant, hosts: [...grant.hosts, host] })
+    }
+
+    const checked = checkRequest(vault, req)
+    if ('deny' in checked) return { deny: `${$.plugin.name}: ${checked.deny}` }
+
+    const res = await $.http.fetch(checked.url, checked.init)
+
+    const kinds: string[] = []
+    const body = res.text.length > MAX_BODY ? `${res.text.slice(0, MAX_BODY)}\n[cut at ${MAX_BODY} characters]` : res.text
+    const result = redactDeep({ status: res.status, headers: res.headers, body }, kinds, known)
+
+    if (kinds.length > 0) $.ui.toast(`Redacted ${kinds.length} secret${kinds.length === 1 ? '' : 's'} from a response: ${kinds.join(', ')}`)
+
+    // A plugin's tool answers text. It is written after the redaction, so JSON escaping cannot hide a secret from it.
+    return { result: JSON.stringify(result, null, 2) }
+  }).catch($ => ({ deny: `${$.plugin.name}: the request failed, so nothing is returned.` }))
 
   // A tool's answer, before the model reads it and before the transcript keeps its structured record.
   on('tool.call', async ($, e, next) => {
@@ -104,16 +134,33 @@ export const register: Register = (on, options) => {
 
   // What the person typed, before the prompt history and the queue record keep it.
   // A slash command's line takes no rewrite here; its arguments are masked at command.run below.
-  on('prompt.submit', ($, e, next) => {
+  on('prompt.submit', async ($, e, next) => {
     if (e.command !== undefined) return next(e)
+
+    // A key the person pastes is one they mean the model to use: keep it, so the redaction names it.
+    const pasted = formatMatches(e.text, known)
+    const kept: string[] = []
+    for (const { kind, value } of pasted) {
+      if (known.some(([form]) => form === value)) continue
+      const name = `pasted-${[...vault.values()].filter(g => g.pasted !== undefined).length + 1}`
+      keep(name, pastedGrant(kind, value))
+      kept.push(`"${name}", a ${kind}`)
+    }
+    if (kept.length > 0) await $.tool.register(toolSpec())
 
     const kinds: string[] = []
     const text = redact(e.text, kinds, known)
 
     if (kinds.length === 0) return next(e)
 
-    $.ui.toast(`Redacted ${kinds.length} secret${kinds.length === 1 ? '' : 's'} from your prompt: ${kinds.join(', ')}`)
-    return next({ ...e, text })
+    $.ui.toast(
+      `Redacted ${kinds.length} secret${kinds.length === 1 ? '' : 's'} from your prompt: ${kinds.join(', ')}` +
+        (kept.length > 0 ? `. Kept for this session; you are asked before it goes to a host.` : ''),
+    )
+    if (kept.length === 0) return next({ ...e, text })
+
+    const note = `${$.plugin.name} kept what the person pasted, for this session: ${kept.join('; ')}. Send it with the ${TOOL_NAME} tool, naming it; the person is asked before it goes to each host.`
+    return next({ ...e, text, context: [...(e.context ?? []), note] })
   }).catch(($, e, next) => (next.called ? next(e) : { drop: `${$.plugin.name}: its check failed, so the prompt was not sent.` }))
 
   // A slash command's arguments, before the command runs and before its rows and its history line keep them.

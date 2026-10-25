@@ -25,13 +25,25 @@ export type Known = readonly [string, string][]
 // Replaces each secret in `text` with its kind, and records the kind in `kinds`:
 // first the stored secrets by value, then the known formats.
 export function redact(text: string, kinds: string[] = [], known: Known = []): string {
+  return replaceFormats(redactKnown(text, known, kinds), kind => kinds.push(kind))
+}
+
+// Each key in a known format that `text` holds and that is not a stored secret,
+// with its kind, found in the order `redact` replaces them.
+export function formatMatches(text: string, known: Known = []): { kind: string; value: string }[] {
+  const found: { kind: string; value: string }[] = []
+  replaceFormats(redactKnown(text, known), (kind, value) => found.push({ kind, value }))
+  return found
+}
+
+function replaceFormats(text: string, onMatch: (kind: string, value: string) => void): string {
   return PATTERNS.reduce(
     (out, { kind, re }) =>
-      out.replace(re, () => {
-        kinds.push(kind)
+      out.replace(re, value => {
+        onMatch(kind, value)
         return `[redacted: ${kind}]`
       }),
-    redactKnown(text, known, kinds),
+    text,
   )
 }
 

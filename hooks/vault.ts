@@ -6,6 +6,9 @@ export type Grant = {
   header: string
   // How the header's value is spelled, `{}` standing for the secret: `Bearer {}`.
   template: string
+  // Set on a key the person pasted into a prompt, to its kind. Such a grant starts
+  // with no hosts; each one is added when the person allows it at first use.
+  pasted?: string
 }
 
 export type Vault = ReadonlyMap<string, Grant>
@@ -56,16 +59,26 @@ export function parseVault(text: string | undefined): Vault {
   return vault
 }
 
+// A key pasted into a prompt, kept for the session. It goes to no host until the
+// person allows one, and then as a bearer token.
+export function pastedGrant(kind: string, value: string): Grant {
+  return { value, hosts: [], header: 'Authorization', template: 'Bearer {}', pasted: kind }
+}
+
+// The host a request's URL names, lowercased, or undefined when the URL is not https://<host>/<path>.
+export function hostOf(url: string): string | undefined {
+  return URL_SHAPE.exec(url)?.[1]?.toLowerCase()
+}
+
 // The fetch a request comes to, or why it does not run. The secret goes in
 // only here, after the host is held to the grant.
 export function checkRequest(vault: Vault, req: Request): Checked | { deny: string } {
   const grant = vault.get(req.secret)
   if (grant === undefined) return { deny: `no secret is named "${req.secret}"` }
 
-  const shape = URL_SHAPE.exec(req.url)
-  if (shape === null) return { deny: 'the URL must be https://<host>/<path>, with no user info or port' }
+  const host = hostOf(req.url)
+  if (host === undefined) return { deny: 'the URL must be https://<host>/<path>, with no user info or port' }
 
-  const host = (shape[1] ?? '').toLowerCase()
   if (!grant.hosts.includes(host)) return { deny: `"${req.secret}" may be sent to ${grant.hosts.join(', ')} only, not ${host}` }
 
   const method = (req.method ?? 'GET').toUpperCase()
