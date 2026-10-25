@@ -1,5 +1,5 @@
 {
-  "name": "sanitize-secrets",
+  "name": "stiekem-toch",
   "version": "0.3.0",
   "description": "Redacts API keys and tokens from tool results and prompts, and lets the model use stored keys without reading them.",
   "author": {
@@ -10,7 +10,7 @@
     "vault": {
       "type": "string",
       "title": "Stored secrets",
-      "description": "JSON object of secrets the model may use without reading: {\"<name>\": {\"value\", \"hosts\": [...], \"header\", \"template\": \"Bearer {}\"}}. Set it with `claude plugin configure sanitize-secrets --values-stdin` in your own terminal.",
+      "description": "JSON object of secrets the model may use without reading: {\"<name>\": {\"value\", \"hosts\": [...], \"header\", \"template\": \"Bearer {}\"}}. Set it with `claude plugin configure stiekem-toch --values-stdin` in your own terminal.",
       "sensitive": true,
       "required": false,
       "default": ""

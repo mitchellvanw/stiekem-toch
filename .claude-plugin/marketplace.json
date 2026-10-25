@@ -1,5 +1,5 @@
 {
-  "name": "sanitize-secrets",
+  "name": "stiekem-toch",
   "owner": {
     "name": "Mitchell van Wijngaarden"
   },
@@ -8,7 +8,7 @@
   },
   "plugins": [
     {
-      "name": "sanitize-secrets",
+      "name": "stiekem-toch",
       "source": "./",
       "description": "Redacts API keys and tokens from tool results and prompts, and lets the model use stored keys without reading them."
     }

@@ -17,7 +17,7 @@ const PATTERNS: readonly { kind: string; re: RegExp }[] = [
 
 export type Block = { type: string; [field: string]: unknown }
 
-const WITHHELD = '[withheld: sanitize-secrets could not check this]'
+const WITHHELD = '[withheld: stiekem-toch could not check this]'
 
 // Each spelling of a stored secret, with the name the model reads in its place.
 export type Known = readonly [string, string][]

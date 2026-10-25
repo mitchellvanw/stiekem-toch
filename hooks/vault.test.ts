@@ -7,7 +7,7 @@ const VAULT_JSON = JSON.stringify({
   github: { value: VALUE, hosts: ['api.github.com'], header: 'Authorization', template: 'Bearer {}' },
 })
 const vault = parseVault(VAULT_JSON)
-const TOOL = 'mcp__sanitize-secrets__request'
+const TOOL = 'mcp__stiekem-toch__request'
 
 test('a grant missing a field is dropped whole', () => {
   const v = parseVault(JSON.stringify({ a: { value: VALUE, hosts: [], header: 'Authorization' } }))

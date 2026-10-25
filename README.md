@@ -1,4 +1,6 @@
-# sanitize-secrets
+# stiekem-toch
+
+Dutch for "secretly, after all".
 
 A Claude Code mod that keeps API keys and tokens out of what the model reads and what the transcript keeps, and lets the model use keys you store without ever reading them.
 
@@ -18,12 +20,12 @@ When a tool's answer or something you type holds a key in a known format, or a k
 
 ## Stored secrets
 
-Store a key and the hosts it may go to, and the model can make HTTPS requests with it through the `mcp__sanitize-secrets__request` tool. The model names the key. The mod adds it to the request on the host and removes it from the response before the model reads it. The tool is offered even when nothing is stored, so the model knows this is how a key reaches a request.
+Store a key and the hosts it may go to, and the model can make HTTPS requests with it through the `mcp__stiekem-toch__request` tool. The model names the key. The mod adds it to the request on the host and removes it from the response before the model reads it. The tool is offered even when nothing is stored, so the model knows this is how a key reaches a request.
 
 Set them in your own terminal, so the key never passes through a session:
 
 ```sh
-claude plugin configure sanitize-secrets --values-stdin
+claude plugin configure stiekem-toch --values-stdin
 ```
 
 Give it a JSON object whose `vault` holds the secrets, written as one line of JSON:
@@ -88,24 +90,24 @@ Per the mods documentation, hooks run in the terminal, the Desktop app's Code ta
 
 ## Install
 
-Requires Claude Code 2.1.275 or later. The repository is private, so you need read access to `mitchellvanw/sanitize-secrets` and git credentials for GitHub on this machine (an SSH key, or `gh auth login`).
+Requires Claude Code 2.1.275 or later.
 
 In Claude Code:
 
 ```
-/plugin install sanitize-secrets --marketplace mitchellvanw/sanitize-secrets
+/plugin install stiekem-toch --marketplace mitchellvanw/stiekem-toch
 ```
 
 Or from a terminal:
 
 ```sh
-claude plugin install sanitize-secrets --marketplace mitchellvanw/sanitize-secrets
+claude plugin install stiekem-toch --marketplace mitchellvanw/stiekem-toch
 ```
 
 This installs for you, in user scope. To try it for one session from a clone instead:
 
 ```sh
-claude --plugin-dir /path/to/sanitize-secrets
+claude --plugin-dir /path/to/stiekem-toch
 ```
 
 ## Develop

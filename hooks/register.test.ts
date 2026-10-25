@@ -3,7 +3,7 @@ import { expect, test, type TestBody } from 'claude-code/testing'
 // Built from parts, so this file holds no whole key for a secret scanner to flag.
 const GITHUB = 'ghp_' + 'a'.repeat(36)
 const JWT = 'eyJ' + 'h'.repeat(20) + '.' + 'p'.repeat(20) + '.' + 's'.repeat(20)
-const TOOL = 'mcp__sanitize-secrets__request'
+const TOOL = 'mcp__stiekem-toch__request'
 
 test('a Bash command holding a token is denied', async ($, on) => {
   // Stands in for the engine beneath the plugin: a call that gets this far would run.

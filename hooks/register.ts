@@ -3,7 +3,7 @@ import { formatMatches, redact, redactBlock, redactDeep, secretKinds, withhold }
 import { checkRequest, hostOf, parseVault, pastedGrant, spellings, type Grant, type Request } from './vault'
 
 const TOOL = 'request'
-const TOOL_NAME = `mcp__sanitize-secrets__${TOOL}`
+const TOOL_NAME = `mcp__stiekem-toch__${TOOL}`
 // Bodies past this are cut before the model reads them.
 const MAX_BODY = 100_000
 const ALLOW = 'Send it'
@@ -39,7 +39,7 @@ export const register: Register = (on, options) => {
       description: [
         'Makes an HTTPS request with a stored secret attached. You never see the secret: the plugin adds it to the request and removes it from the response.',
         listing.length > 0 ? `Each secret goes only to its own hosts:\n${listing.join('\n')}` : 'No secret is stored yet.',
-        'The person adds one by pasting it into a prompt, which keeps it for the session, or for good with `claude plugin configure sanitize-secrets --values-stdin` in their own terminal.',
+        'The person adds one by pasting it into a prompt, which keeps it for the session, or for good with `claude plugin configure stiekem-toch --values-stdin` in their own terminal.',
         'Use this instead of putting a key in a Bash command, which is refused, or reading one from a file into a command.',
       ].join('\n'),
       inputSchema: {
